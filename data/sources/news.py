@@ -21,8 +21,11 @@ class CoinDeskSource(BaseSource):
             "limit" : 1,
             "source_ids": [],
             "exclude_categories": [],
-            "to_ts": -1,
         }
+        if end:
+            params["to_ts"] = end
+        else :
+            params["to_ts"] = -1
         try:
             resp = self.session.get(self.base_url, params=params)
             resp.raise_for_status()
