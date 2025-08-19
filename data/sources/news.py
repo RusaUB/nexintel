@@ -4,8 +4,10 @@ import datetime
 
 class CoinDeskSource(BaseSource):
     def __init__(self, api_key, base_url):
+        super().__init__(name="CoinDeskSource")
         self.api_key = api_key
         self.base_url = base_url
+        self.logger.info("Connected to CoinDesk API")
     
     def connect(self):
         self.session = requests.Session()
@@ -20,21 +22,29 @@ class CoinDeskSource(BaseSource):
             "exclude_categories": [],
             "to_ts": -1,
         }
-        resp = self.session.get(self.base_url,params=params)
-        resp.raise_for_status()
-        resp_json = resp.json()
-        return resp_json
+        try:
+            resp = self.session.get(self.base_url, params=params)
+            resp.raise_for_status()
+            self.logger.debug(f"Fetched data with params={params}")
+            return resp.json()
+        except Exception as e:
+            self.logger.error(f"Error while fetching: {e}")
+            raise
     
     def normalize(self, raw):
-        return Event(
-            timestamp=datetime.datetime.now(),
-            asset=None,
-            source="CoinDesk",
-            title=raw["Data"][0]["TITLE"],
-            content=raw["Data"][0]["BODY"],
-            sentiment=None,
-            meta=None
-        )
+        try:
+            event = Event(
+                timestamp=datetime.datetime.now(),
+                asset=None,
+                source="CoinDesk",
+                title=raw["Data"][0]["TITLE"],
+                content=raw["Data"][0]["BODY"],
+            )
+            self.logger.debug(f"Normalized event: {event.title}")
+            return event
+        except Exception as e:
+            self.logger.error(f"Error normalizing data: {e}")
+            raise
     
     def close(self):
         if self.session:
