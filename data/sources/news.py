@@ -7,11 +7,12 @@ class CoinDeskSource(BaseSource):
         super().__init__(name="CoinDeskSource")
         self.api_key = api_key
         self.base_url = base_url
-        self.logger.info("Connected to CoinDesk API")
+        self.session = None
     
     def connect(self):
         self.session = requests.Session()
         self.session.headers.update({"Authorization": f"Bearer {self.api_key}"})
+        self.logger.info("Connected to CoinDesk API")
 
     def fetch(self, start, end):
         params = {
@@ -49,5 +50,6 @@ class CoinDeskSource(BaseSource):
     def close(self):
         if self.session:
             self.session.close()
+            self.logger.info("Session closed")
 
 
