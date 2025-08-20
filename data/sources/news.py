@@ -18,7 +18,7 @@ class CoinDeskSource(BaseSource):
         params = {
             "lang": "EN",
             "categories": [],
-            "limit" : 1,
+            "limit" : 10,
             "source_ids": [],
             "exclude_categories": [],
         }
@@ -37,15 +37,27 @@ class CoinDeskSource(BaseSource):
     
     def normalize(self, raw):
         try:
-            event = Event(
-                timestamp=datetime.datetime.now(),
-                asset=None,
-                source="CoinDesk",
-                title=raw["Data"][0]["TITLE"],
-                content=raw["Data"][0]["BODY"],
-            )
-            self.logger.debug(f"Normalized event: {event.title}")
-            return event
+            events = []
+            now = datetime.datetime.now()
+
+            for item in raw.get("Data", []):
+                event = Event(
+                    timestamp=now,
+                    asset=None,
+                    source="CoinDesk",
+                    title=item.get("TITLE", "No title"),
+                    content=item.get("BODY", "No content"),
+                    sentiment=None,
+                    meta={
+                        "id": item.get("ID"),
+                        "url": item.get("URL"),
+                        "categories": item.get("CATEGORIES")
+                    }
+                )
+                events.append(event)
+
+            self.logger.debug(f"Normalized {len(events)} events from CoinDesk")
+            return events
         except Exception as e:
             self.logger.error(f"Error normalizing data: {e}")
             raise
