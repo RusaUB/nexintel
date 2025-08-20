@@ -54,5 +54,3 @@ class CoinDeskSource(BaseSource):
         if self.session:
             self.session.close()
             self.logger.info("Session closed")
-
-
