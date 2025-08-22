@@ -1,4 +1,4 @@
-from base import BaseSource, Event
+from data.sources.base import BaseSource, Event
 import requests
 import datetime
 
