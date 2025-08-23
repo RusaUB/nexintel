@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from data.sources.news import CoinDeskSource
 
 from agents.news_agent import NewsDataAgent
+from factors.tag_split import split_factor_by_tags
 import datetime
 
 load_dotenv()
@@ -15,4 +16,13 @@ source.close()
 agent = NewsDataAgent()
 factor = agent.run(date=datetime.datetime.now(),events=events)
 
-print(factor)
+
+tag_factors = split_factor_by_tags(
+    factor,                      
+    tag_priority=None,           
+    max_obs_per_factor=7,        
+    max_tokens_factor=4000,
+    fallback_tag="misc",
+)
+
+print(tag_factors)
