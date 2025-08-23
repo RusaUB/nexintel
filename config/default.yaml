@@ -1,0 +1,130 @@
+app:
+  name: NexIntel
+  env: dev
+
+logging:
+  level: INFO          
+  format: "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
+  datefmt: "%Y-%m-%d %H:%M:%S"
+  module_levels:
+    NexIntel.Agents: DEBUG
+    NexIntel.Factors: DEBUG
+    NexIntel.Contest: INFO
+
+paths:
+  data_dir: ./data
+  logs_dir: ./logs
+
+secrets:             
+  deepseek_api_key_env: DEEPSEEK_API_KEY
+  coindesk_api_key_env: COINDESK_API_KEY
+
+data_sources:
+  coindesk:
+    enabled: true
+    base_url: "https://data-api.coindesk.com/news/v1/article/list"    
+    fetch:
+      lang: "EN"
+      categories: []        
+      exclude_categories: []
+      source_ids: []
+      limit: 10              
+      to_ts: -1             
+    timeout_sec: 20
+
+agents:
+  news_data_agent:
+    enabled: true
+    preference: null         
+    max_obs: 7
+    max_tokens_factor: 4000
+    deepseek:
+      model: "deepseek-chat"         
+      base_url: "https://api.deepseek.com"
+      temperature: 0.1
+      max_output_tokens: 1200
+    tags:
+      llm_assign_tags: true                
+      max_tags_per_observation: 3
+      canon:
+        - macro
+        - regulation
+        - etf
+        - onchain
+        - derivatives
+        - orderbook
+        - sentiment
+        - tokenomics
+        - stablecoins
+        - ecosystem
+        - protocol
+        - narratives
+        - cex
+        - dex
+        - liquidity
+      synonyms:
+        macro_economy: macro
+        macro_economic: macro
+        rates: macro
+        cpi: macro
+        fed: macro
+        yields: macro
+        regulatory: regulation
+        policy: regulation
+        sec: regulation
+        etf_flows: etf
+        spot_etf: etf
+        futures_etf: etf
+        on_chain: onchain
+        chain: onchain
+        addresses: onchain
+        tvl: onchain
+        perps: derivatives
+        funding: derivatives
+        open_interest: derivatives
+        basis: derivatives
+        liquidations: derivatives
+        order_flow: orderbook
+        book: orderbook
+        depth: orderbook
+        newsflow: sentiment
+        social: sentiment
+        tone: sentiment
+        unlock: tokenomics
+        emission: tokenomics
+        halving: tokenomics
+        stables: stablecoins
+        usdt: stablecoins
+        usdc: stablecoins
+        dev_activity: protocol
+        revenue: protocol
+        fee: protocol
+        l2: ecosystem
+        sector_rotation: narratives
+        centralized_exchange: cex
+        decentralized_exchange: dex
+        market_liquidity: liquidity
+        depth_liquidity: liquidity
+    split_by_tags:
+      enabled: true
+      priority:
+        - etf
+        - onchain
+        - derivatives
+        - orderbook
+        - tokenomics
+        - stablecoins
+        - protocol
+        - ecosystem
+        - liquidity
+        - narratives
+        - macro
+        - regulation
+        - cex
+        - dex
+        - sentiment
+        - news
+      per_factor_limits:
+        max_obs: 7
+        max_tokens_factor: 4000
+      fallback_tag: "misc"
