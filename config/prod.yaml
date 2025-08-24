@@ -1,0 +1,13 @@
+app:
+  env: prod
+
+paths:
+  data_dir: ./data/prod
+  logs_dir: ./logs/prod
+
+database:
+  url_env: SUPABASE_DB_URL_PROD
+  schema: nexintel
+
+logging:
+  level: INFO

@@ -1,5 +1,7 @@
 env
-.env
+
+.env.dev
+.env.prod
+
 __pycache__/
-dune_cache/
 logs/

@@ -1,0 +1,13 @@
+app:
+  env: dev
+
+paths:
+  data_dir: ./data/dev
+  logs_dir: ./logs/dev
+
+database:
+  url_env: SUPABASE_DB_URL_DEV
+  schema: nexintel_dev
+
+logging:
+  level: DEBUG
