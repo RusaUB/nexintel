@@ -7,7 +7,7 @@ from data.sources.base import Event
 class Observation:
     text: str                 
     asset: Optional[str] = None
-    confidence: float = 1.0    
+    rating: int = 0 
     tags: List[str] = field(default_factory=list)
 
 @dataclass

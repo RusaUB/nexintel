@@ -4,7 +4,7 @@ import re
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from clients.deepseek import DeepSeek  
+from clients.deepseek import DeepSeek
 from factors.schema import TextualFactor, Observation
 from data.sources.base import Event
 from agents.base import BaseAgent
@@ -36,44 +36,31 @@ def _snake(s: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "_", s)
     return re.sub(r"_+", "_", s).strip("_")
 
+def _coerce_rating(x: Any, default: int = 0) -> int:
+    """Map any value to an int in [-2,2]."""
+    try:
+        v = int(float(x))
+    except Exception:
+        v = default
+    return max(-2, min(2, v))
+
 
 class NewsDataAgent(BaseAgent):
     """
     DataAgent: reads a batch of Event objects for the day, asks DeepSeek to produce
     3–7 atomic observations (each linked to ONE asset), assigns topical tags,
-    and builds a TextualFactor (<= ~4k tokens) ready for Data Contest (Quantify→Predict→Allocate).
+    and builds a TextualFactor (<= ~4k tokens) ready for Data Contest.
     All tunables are loaded from YAML config via `from_config(...)`.
     """
 
     # ------- construction from config -------
     @classmethod
     def from_config(cls, agent_cfg: Dict[str, Any], secrets_cfg: Optional[Dict[str, Any]] = None) -> "NewsDataAgent":
-        """
-        Expected structure (subset):
-          agents:
-            news_data_agent:
-              enabled: true
-              preference: null
-              max_obs: 7
-              max_tokens_factor: 4000
-              deepseek:
-                model: "deepseek-chat"
-                base_url: "https://api.deepseek.com"
-                temperature: 0.1
-                max_output_tokens: 1200
-              tags:
-                llm_assign_tags: true
-                max_tags_per_observation: 3
-                canon: [ ... ]
-                synonyms: { alias: canon, ... }
-        """
-        # Core agent params
         name = "NewsDataAgent"
         preference = agent_cfg.get("preference")
         max_obs = int(agent_cfg.get("max_obs", 7))
         max_tokens_factor = int(agent_cfg.get("max_tokens_factor", 4000))
 
-        # DeepSeek params
         ds = agent_cfg.get("deepseek", {}) or {}
         model = ds.get("model", "deepseek-chat")
         base_url = ds.get("base_url", "https://api.deepseek.com")
@@ -84,14 +71,12 @@ class NewsDataAgent(BaseAgent):
             base_url=base_url,
         )
 
-
         tags_cfg = (agent_cfg.get("tags") or {})
         llm_assign_tags = bool(tags_cfg.get("llm_assign_tags", True))
         max_tags_per_observation = int(tags_cfg.get("max_tags_per_observation", 3))
         tag_canon = set(tags_cfg.get("canon") or [])
         tag_synonyms = dict(tags_cfg.get("synonyms") or {})
 
-        # Instantiate
         inst = cls(
             name=name,
             preference=preference,
@@ -101,7 +86,6 @@ class NewsDataAgent(BaseAgent):
             sdk=sdk,
             llm_max_output_tokens=max_output_tokens,
         )
-        # Attach tag configuration
         inst._llm_assign_tags = llm_assign_tags
         inst._max_tags_per_obs = max_tags_per_observation
         inst._tag_canon = tag_canon
@@ -112,7 +96,6 @@ class NewsDataAgent(BaseAgent):
             preference, max_obs, max_tokens_factor, model, base_url, llm_assign_tags, max_tags_per_observation
         )
         return inst
-
 
     def __init__(
         self,
@@ -142,6 +125,7 @@ class NewsDataAgent(BaseAgent):
             self.preference, self.max_obs, self.max_tokens_factor
         )
 
+    # ------- tagging helpers -------
     def _normalize_tags(self, raw_tags: List[str], text: str) -> List[str]:
         """
         Normalize tags with config:
@@ -151,7 +135,6 @@ class NewsDataAgent(BaseAgent):
         seen = set()
         out: List[str] = []
 
-        # normalize + synonyms + dedup
         for tag in raw_tags or []:
             t0 = _snake(tag)
             if not t0:
@@ -161,7 +144,6 @@ class NewsDataAgent(BaseAgent):
                 seen.add(t1)
                 out.append(t1)
 
-        # heuristic fallback if no tags were returned
         if len(out) < 1:
             txt = (text or "").lower()
 
@@ -191,10 +173,8 @@ class NewsDataAgent(BaseAgent):
             if any(k in txt for k in ["narrative", "sector rotation", "theme"]):
                 add("narratives")
 
-        # cap by max count
         out = out[: self._max_tags_per_obs]
 
-        # log non-canon tags for observability (not an error)
         for t in out:
             if self._tag_canon and t not in self._tag_canon:
                 self.logger.info("Tags: detected NEW/NON-CANON tag: %s", t)
@@ -223,17 +203,16 @@ class NewsDataAgent(BaseAgent):
             bullets.append(f"{i}. {ev.title.strip()} :: {ev.content.strip()[:280]}")
         news_blob = "\n".join(bullets)
 
-        # Instruction depends on whether we want LLM to assign tags
+        # Prompt: ask for discrete rating in [-2..2]
         system = (
             "You are a DataAgent in a multi-agent trading system. "
             "Produce a SHORT textual factor with 3–7 atomic observations for the day. "
-            "Each observation MUST focus on ONE asset and include a brief causal reason "
-            "for 1–3 day price impact. "
+            "Each observation MUST focus on ONE asset, explain the 1–3 day price impact, "
+            "and include a discrete impact rating in {-2,-1,0,1,2} (direction & strength). "
         )
         if self._llm_assign_tags:
             system += "Additionally, assign smart topical tags per observation."
 
-        # User message with strict JSON schema
         if self._llm_assign_tags:
             user = f"""Date: {date.date()}
 Preference of the day: {self.preference or "none"}
@@ -248,8 +227,8 @@ Return STRICT JSON:
       "text": "Short atomic observation (what happened → why it matters → asset)",
       "asset": "MAIN SYMBOL in UPPERCASE or null if unsure",
       "symbols": ["LIST of possible symbols/aliases/tickers, can be empty"],
-      "tags": ["lower_snake_case topical tags"],
-      "confidence": 0.0-1.0
+      "rating": -2,  # integer in [-2,-1,0,1,2]
+      "tags": ["lower_snake_case topical tags"]
     }}
   ]
 }}
@@ -260,7 +239,6 @@ Rules:
 - Keep it short (overall ≤ ~4k tokens).
 """
         else:
-            # No tags requested from LLM; we will heuristically assign them.
             user = f"""Date: {date.date()}
 Preference of the day: {self.preference or "none"}
 
@@ -274,7 +252,7 @@ Return STRICT JSON:
       "text": "Short atomic observation (what happened → why it matters → asset)",
       "asset": "MAIN SYMBOL in UPPERCASE or null if unsure",
       "symbols": ["LIST of possible symbols/aliases/tickers, can be empty"],
-      "confidence": 0.0-1.0
+      "rating": 0   # integer in [-2,-1,0,1,2]
     }}
   ]
 }}
@@ -294,12 +272,12 @@ Rules:
             )
         except Exception as e:
             self.logger.exception("LLM call failed, falling back: %s", e)
-            # Simple fallback: build one observation per event
+            # Simple fallback: build one neutral observation per event
             return [
                 Observation(
                     text=f"{ev.title.strip()}. May affect short-term supply/demand.",
                     asset=_guess_asset_simple(f"{ev.title} {ev.content}"),
-                    confidence=0.7,
+                    rating=0,
                     tags=["news", "fallback"]
                 )
                 for ev in events
@@ -314,24 +292,21 @@ Rules:
             asset = (item.get("asset") or "").strip() or None
             symbols = item.get("symbols") or []
             llm_tags = item.get("tags") or []
-            conf = float(item.get("confidence", 1.0) or 1.0)
+            rating = _coerce_rating(item.get("rating", 0), default=0)
 
-            # Asset fallback if LLM left it empty
             if not asset:
                 asset = _guess_asset_simple(text)
 
-            # Log "new/unknown" symbols for visibility; we do not drop them
             if asset and asset not in {"BTC", "ETH", "SOL", "BNB", "TON"}:
                 self.logger.info("LLM detected possibly new/unknown symbol: %s (symbols=%s)", asset, symbols)
 
-            # Tag normalization (from config). If LLM tagging is disabled, llm_tags will be empty -> heuristic.
             tags = self._normalize_tags([str(t) for t in llm_tags], text=text)
-            self.logger.debug("Obs %d: asset=%s tags=%s conf=%.2f", i, asset, tags, conf)
+            self.logger.debug("Obs %d: asset=%s rating=%+d tags=%s", i, asset, rating, tags)
 
             out.append(Observation(
                 text=text,
                 asset=asset,
-                confidence=max(0.0, min(conf, 1.0)),
+                rating=rating,
                 tags=tags or ["news"]
             ))
         return out
@@ -359,7 +334,6 @@ Rules:
         self.logger.debug("Dedup/limit: output_obs=%d, tokens≈%d", len(kept), total)
         return kept
 
-
     def run(self, date: datetime, events: List[Event]) -> TextualFactor:
         self.logger.info("Run: date=%s, raw_events=%d", date.date(), len(events))
         filtered = self._filter_events(events)
@@ -367,7 +341,7 @@ Rules:
         if not filtered:
             self.logger.info("No relevant events; emitting neutral factor")
             empty = Observation(text="No new significant events identified; neutral day.",
-                                tags=["news"])
+                                rating=0, tags=["news"])
             factor = TextualFactor(date, self.name, [empty], _rough_token_len(empty.text),
                                    self.preference, [])
             self.logger.debug("Factor built: obs=%d, tokens≈%d",
