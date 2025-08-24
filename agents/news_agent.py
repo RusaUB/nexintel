@@ -9,7 +9,6 @@ from factors.schema import TextualFactor, Observation
 from data.sources.base import Event
 from agents.base import BaseAgent
 
-logger = logging.getLogger("NexIntel")
 
 # --- asset fallback map (used only if LLM didn't return an asset) ---
 SYMBOL_MAP = {
@@ -107,7 +106,7 @@ class NewsDataAgent(BaseAgent):
         sdk: Optional[DeepSeek] = None,
         llm_max_output_tokens: int = 1200,
     ):
-        super().__init__(name)
+        super().__init__(name=name)
         self.preference = preference
         self.max_obs = max_obs
         self.max_tokens_factor = max_tokens_factor
@@ -119,7 +118,6 @@ class NewsDataAgent(BaseAgent):
         self._tag_canon: set[str] = set()
         self._tag_synonyms: Dict[str, str] = {}
 
-        self.logger = logging.getLogger(f"NexIntel.Agents.{self.__class__.__name__}.{self.name}")
         self.logger.debug(
             "NewsDataAgent init: pref=%s, max_obs=%d, max_tokens_factor=%d",
             self.preference, self.max_obs, self.max_tokens_factor

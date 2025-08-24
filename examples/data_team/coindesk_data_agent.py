@@ -1,13 +1,15 @@
-import os
 from dotenv import load_dotenv
 from data.sources.news import CoinDeskSource
 import yaml
 from agents.news_agent import NewsDataAgent
 from factors.tag_split import split_factor_by_tags
 import datetime
+from utils.logging_setup import setup_logging_from_yaml
 
 with open("config/default.yaml", "r") as f:
     cfg = yaml.safe_load(f)
+
+setup_logging_from_yaml(cfg)
 
 coindesk_cfg = cfg["data_sources"]["coindesk"]
 agent_cfg = cfg["agents"]["news_data_agent"]
@@ -22,7 +24,6 @@ source.close()
 
 agent = NewsDataAgent.from_config(agent_cfg, secrets_cfg=secrets_cfg)
 factor = agent.run(date=datetime.datetime.now(),events=events)
-
 
 tag_factors = split_factor_by_tags(factor,cfg)
 

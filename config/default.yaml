@@ -9,7 +9,6 @@ logging:
   module_levels:
     NexIntel.Agents: DEBUG
     NexIntel.Factors: DEBUG
-    NexIntel.Contest: INFO
 
 paths:
   data_dir: ./data
