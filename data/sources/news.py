@@ -144,9 +144,10 @@ class CoinDeskSource(BaseSource):
 
                 title = item.get("TITLE") or item.get("title") or "No title"
                 body = item.get("BODY") or item.get("summary") or item.get("content") or "No content"
+                time = item.get("PUBLISHED_ON")
 
                 ev = Event(
-                    timestamp=now,        
+                    timestamp=time,        
                     asset=None,
                     source="CoinDesk",
                     title=title,
