@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from copy import deepcopy
 from typing import Dict, Any
+from dotenv import load_dotenv
 
 import yaml
 
@@ -76,3 +77,20 @@ def load_config() -> Dict[str, Any]:
     cfg["app"]["env"] = env
     log.warning("Loaded fallback config: %s (env=%s)", str(default_path), env)
     return cfg
+
+def load_env_profile() -> str:
+    if Path(".env").exists():
+        load_dotenv(".env", override=False)
+
+    env = (os.getenv("APP_ENV") or "dev").strip().lower()
+    profile = Path(f".env.{env}")
+    if profile.exists():
+        load_dotenv(profile, override=True)
+    else:
+        print(f"[warn] {profile} not found; using only .env")
+
+    if Path(".env.local").exists():
+        load_dotenv(".env.local", override=True)
+
+    os.environ.setdefault("APP_ENV", env)
+    return env
